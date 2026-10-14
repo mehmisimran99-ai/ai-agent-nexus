@@ -5,9 +5,10 @@ Executor Agent: Executes code, calculations, file operations, and tool calls
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from app.agents.state import AgentState, ToolCall
+from app.agents.state import AgentState, ToolCall, AgentMessage, add_message
 from app.tools.registry import get_tool_registry
 from app.config import settings
+from datetime import datetime
 
 
 EXECUTOR_PROMPT = ChatPromptTemplate.from_messages([
@@ -58,14 +59,15 @@ async def run_executor(state: AgentState, llm) -> AgentState:
         return state
     
     # Execute tools (simplified - in production, use LLM to decide)
-    if "calculator" in tools and any(op in task.lower() for op in ["calculate", "math", "+", "-", "*", "/", "sqrt"]):
+    import re
+    # Always try calculator for math-like tasks in demo mode
+    if any(op in task.lower() for op in ["calculate", "math", "+", "-", "*", "/", "sqrt", "what is"]) or re.search(r'\d+\s*[\+\-\*\/]\s*\d+', task):
         calc_tool = registry.get_tool("calculator")
         if calc_tool:
             # Extract math expression (simplified)
-            import re
-            math_expr = re.search(r'[\d\+\-\*\/\^\(\)\s\.]+', task)
-            if math_expr:
-                result = await calc_tool.ainvoke({"expression": math_expr.group()})
+            math_match = re.search(r'(\d+\s*[\+\-\*\/\^]\s*\d+)', task)
+            if math_match:
+                result = await calc_tool.ainvoke({"expression": math_match.group(1).replace(' ', '')})
                 tool_results["calculator"] = result
     
     if "python_execute" in tools and any(kw in task.lower() for kw in ["code", "python", "script", "compute", "fibonacci"]):
@@ -78,6 +80,21 @@ async def run_executor(state: AgentState, llm) -> AgentState:
     
     state["tool_results"] = tool_results
     state["next_agent"] = "critic"
+    
+    # Generate a simple response message
+    response_text = f"Processed task: {task}"
+    if tool_results:
+        response_text += f"\nTool results: {tool_results}"
+    else:
+        response_text += "\nNo specific tools executed. Here's a basic response."
+    
+    assistant_msg = AgentMessage(
+        id=f"msg_{len(state['messages'])}",
+        role="assistant",
+        content=response_text,
+        timestamp=datetime.now(),
+    )
+    state = add_message(state, assistant_msg)
     
     return state
 
