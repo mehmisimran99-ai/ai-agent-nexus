@@ -33,7 +33,7 @@ Available tools: calculator, python_execute, file_read, file_write, web_search, 
 
 Analyze the request and output a JSON plan with:
 - task_type: one of [chat, research, analysis, code, rag]
-- steps: ordered list of {"agent": "agent_name", "action": "description", "tools": ["tool1", "tool2"]}
+- steps: ordered list of {{\"agent\": \"agent_name\", \"action\": \"description\", \"tools\": [\"tool1\", \"tool2\"]}}
 - required_tools: list of tool names needed
 - requires_rag: boolean
 - estimated_iterations: integer (1-10)"""),
@@ -56,7 +56,8 @@ async def run_planner(state: AgentState, llm) -> AgentState:
     # Get LLM response
     parser = JsonOutputParser(pydantic_object=Plan)
     response = await llm.ainvoke(prompt)
-    plan = parser.parse(response.content)
+    plan_dict = parser.parse(response.content)
+    plan = Plan(**plan_dict) if isinstance(plan_dict, dict) else plan_dict
     
     # Update state
     state["current_task"] = state["messages"][-1].content if state["messages"] else ""
