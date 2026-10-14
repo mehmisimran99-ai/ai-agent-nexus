@@ -66,7 +66,8 @@ async def run_critic(state: AgentState, llm) -> AgentState:
     
     parser = JsonOutputParser(pydantic_object=Critique)
     result = await llm.ainvoke(prompt)
-    critique = parser.parse(result.content)
+    critique_dict = parser.parse(result.content)
+    critique = Critique(**critique_dict) if isinstance(critique_dict, dict) else critique_dict
     
     # Update state based on critique
     if critique.requires_retry and state["retry_count"] < 3:
