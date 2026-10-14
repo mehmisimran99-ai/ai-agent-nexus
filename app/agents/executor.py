@@ -7,6 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from app.agents.state import AgentState, ToolCall
 from app.tools.registry import get_tool_registry
+from app.config import settings
 
 
 EXECUTOR_PROMPT = ChatPromptTemplate.from_messages([
@@ -42,7 +43,7 @@ async def run_executor(state: AgentState, llm) -> AgentState:
     
     # Check if any tools need approval
     approval_tools = [t for t in tools if t in ["file_write", "web_search"]]
-    if approval_tools and state["tool_approval_required"]:
+    if approval_tools and settings.tool_approval_required:
         state["requires_approval"] = True
         state["approval_requests"] = [
             ToolCall(
