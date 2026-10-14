@@ -20,8 +20,20 @@ class MockLLM:
     """Mock LLM for development - replace with real LLM"""
     async def ainvoke(self, messages):
         class MockResponse:
+            def __init__(self, content):
+                self.content = content
+        # Detect which agent is calling based on system prompt
+        system = ""
+        for m in messages:
+            if hasattr(m, "content") and "Planner Agent" in str(m.content):
+                system = "planner"
+            elif hasattr(m, "content") and "Critic Agent" in str(m.content):
+                system = "critic"
+        if system == "critic":
+            content = '{"quality_score": 0.85, "correctness": true, "completeness": true, "issues": [], "suggestions": ["Looks good"], "requires_retry": false, "next_agent": "end"}'
+        else:
             content = '{"task_type": "chat", "steps": [{"agent": "executor", "action": "respond", "tools": []}], "required_tools": [], "requires_rag": false, "estimated_iterations": 1}'
-        return MockResponse()
+        return MockResponse(content)
 
 
 # Global instances
@@ -30,7 +42,7 @@ _rag_pipeline = RAGPipeline()
 _checkpointer = MemorySaver()
 
 
-def should_continue(state: AgentState) -> Literal["planner", "researcher", "executor", "critic", "end"]:
+def should_continue(state: AgentState) -> Literal["planner", "researcher", "executor", "critic", "__end__"]:
     """Determine next node based on state"""
     next_agent = state.get("next_agent", "end")
     if next_agent == "end":
@@ -38,28 +50,24 @@ def should_continue(state: AgentState) -> Literal["planner", "researcher", "exec
     return next_agent
 
 
-def planner_node(state: AgentState) -> AgentState:
+async def planner_node(state: AgentState) -> AgentState:
     """Planner node"""
-    import asyncio
-    return asyncio.run(run_planner(state, _llm))
+    return await run_planner(state, _llm)
 
 
-def researcher_node(state: AgentState) -> AgentState:
+async def researcher_node(state: AgentState) -> AgentState:
     """Researcher node"""
-    import asyncio
-    return asyncio.run(run_researcher(state, _llm, _rag_pipeline))
+    return await run_researcher(state, _llm, _rag_pipeline)
 
 
-def executor_node(state: AgentState) -> AgentState:
+async def executor_node(state: AgentState) -> AgentState:
     """Executor node"""
-    import asyncio
-    return asyncio.run(run_executor(state, _llm))
+    return await run_executor(state, _llm)
 
 
-def critic_node(state: AgentState) -> AgentState:
+async def critic_node(state: AgentState) -> AgentState:
     """Critic node"""
-    import asyncio
-    return asyncio.run(run_critic(state, _llm))
+    return await run_critic(state, _llm)
 
 
 # Build graph
@@ -85,6 +93,7 @@ def build_agent_graph() -> StateGraph:
             "executor": "executor",
             "critic": "critic",
             "end": END,
+            END: END,
         }
     )
     workflow.add_conditional_edges(
@@ -94,6 +103,7 @@ def build_agent_graph() -> StateGraph:
             "executor": "executor",
             "critic": "critic",
             "end": END,
+            END: END,
         }
     )
     workflow.add_conditional_edges(
@@ -102,6 +112,7 @@ def build_agent_graph() -> StateGraph:
         {
             "critic": "critic",
             "end": END,
+            END: END,
         }
     )
     workflow.add_conditional_edges(
@@ -112,6 +123,7 @@ def build_agent_graph() -> StateGraph:
             "researcher": "researcher",
             "executor": "executor",
             "end": END,
+            END: END,
         }
     )
     
