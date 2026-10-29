@@ -3,16 +3,17 @@
 Conversation memory endpoints for thread persistence
 """
 
+from datetime import datetime
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-from datetime import datetime
 
 from app.memory.conversation import ConversationMemory
 
 router = APIRouter()
 
-_memory: Optional[ConversationMemory] = None
+_memory: ConversationMemory | None = None
 
 
 def get_memory() -> ConversationMemory:
@@ -23,8 +24,8 @@ def get_memory() -> ConversationMemory:
 
 
 class ThreadCreateRequest(BaseModel):
-    title: Optional[str] = Field(None, description="Thread title")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Thread metadata")
+    title: str | None = Field(None, description="Thread title")
+    metadata: dict[str, Any] | None = Field(None, description="Thread metadata")
 
 
 class ThreadResponse(BaseModel):
@@ -33,7 +34,7 @@ class ThreadResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     message_count: int
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 class MessageResponse(BaseModel):
@@ -41,13 +42,13 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     timestamp: datetime
-    tool_calls: List[Dict[str, Any]] = []
-    citations: List[Dict[str, Any]] = []
+    tool_calls: list[dict[str, Any]] = []
+    citations: list[dict[str, Any]] = []
 
 
 class ThreadDetailResponse(BaseModel):
     thread: ThreadResponse
-    messages: List[MessageResponse]
+    messages: list[MessageResponse]
 
 
 @router.post("/threads", response_model=ThreadResponse)
@@ -61,7 +62,7 @@ async def create_thread(request: ThreadCreateRequest):
     return ThreadResponse(**thread.to_dict())
 
 
-@router.get("/threads", response_model=List[ThreadResponse])
+@router.get("/threads", response_model=list[ThreadResponse])
 async def list_threads(limit: int = 50, offset: int = 0):
     """List conversation threads"""
     memory = get_memory()

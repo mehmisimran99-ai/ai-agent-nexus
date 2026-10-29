@@ -3,79 +3,88 @@
 Agent state and message types for LangGraph orchestration
 """
 
-from typing import TypedDict, List, Optional, Dict, Any, Literal
 from datetime import datetime
+from typing import Any, Literal, TypedDict
+
 from pydantic import BaseModel, Field
 
 
 class ToolCall(BaseModel):
     """Represents a tool invocation"""
+
     id: str
     name: str
-    arguments: Dict[str, Any]
-    result: Optional[Any] = None
-    status: Literal["pending", "approved", "rejected", "completed", "failed"] = "pending"
-    approved_by: Optional[str] = None
-    approved_at: Optional[datetime] = None
+    arguments: dict[str, Any]
+    result: Any | None = None
+    status: Literal["pending", "approved", "rejected", "completed", "failed"] = (
+        "pending"
+    )
+    approved_by: str | None = None
+    approved_at: datetime | None = None
 
 
 class Citation(BaseModel):
     """Citation for RAG-sourced information"""
+
     source_id: str
     content: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
     score: float
 
 
 class AgentMessage(BaseModel):
     """Message in the conversation"""
+
     id: str
     role: Literal["user", "assistant", "system", "tool"]
     content: str
     timestamp: datetime = Field(default_factory=datetime.now)
-    tool_calls: List[ToolCall] = []
-    citations: List[Citation] = []
-    metadata: Dict[str, Any] = {}
+    tool_calls: list[ToolCall] = []
+    citations: list[Citation] = []
+    metadata: dict[str, Any] = {}
 
 
 class AgentState(TypedDict):
     """LangGraph state for multi-agent orchestration"""
+
     # Conversation
-    messages: List[AgentMessage]
+    messages: list[AgentMessage]
     thread_id: str
-    
+
     # Current task
-    current_task: Optional[str]
-    task_type: Optional[Literal["chat", "research", "analysis", "code", "rag"]]
-    
+    current_task: str | None
+    task_type: Literal["chat", "research", "analysis", "code", "rag"] | None
+
     # Agent routing
-    next_agent: Optional[Literal["planner", "researcher", "executor", "critic", "end"]]
-    agent_outputs: Dict[str, Any]
-    
+    next_agent: Literal["planner", "researcher", "executor", "critic", "end"] | None
+    agent_outputs: dict[str, Any]
+
     # Tools & RAG
-    available_tools: List[str]
-    tool_results: Dict[str, Any]
-    rag_context: List[Citation]
-    
+    available_tools: list[str]
+    tool_results: dict[str, Any]
+    rag_context: list[Citation]
+
     # Governance
     requires_approval: bool
-    approval_requests: List[ToolCall]
-    audit_log: List[Dict[str, Any]]
-    
+    approval_requests: list[ToolCall]
+    audit_log: list[dict[str, Any]]
+
     # Memory
-    conversation_summary: Optional[str]
-    context_window: List[AgentMessage]
-    
+    conversation_summary: str | None
+    context_window: list[AgentMessage]
+
     # Configuration
-    config: Dict[str, Any]
-    
+    config: dict[str, Any]
+
     # Error handling
-    error: Optional[str]
+    error: str | None
     retry_count: int
 
 
 # Initial state factory
-def create_initial_state(thread_id: str, config: Dict[str, Any] = None) -> AgentState:
+def create_initial_state(
+    thread_id: str, config: dict[str, Any] | None = None
+) -> AgentState:
     """Create initial agent state"""
     return AgentState(
         messages=[],
@@ -84,7 +93,14 @@ def create_initial_state(thread_id: str, config: Dict[str, Any] = None) -> Agent
         task_type=None,
         next_agent="planner",
         agent_outputs={},
-        available_tools=["calculator", "python_execute", "file_read", "file_write", "web_search", "rag_query"],
+        available_tools=[
+            "calculator",
+            "python_execute",
+            "file_read",
+            "file_write",
+            "web_search",
+            "rag_query",
+        ],
         tool_results={},
         rag_context=[],
         requires_approval=False,
@@ -107,13 +123,17 @@ def add_message(state: AgentState, message: AgentMessage) -> AgentState:
     return state
 
 
-def add_audit_entry(state: AgentState, action: str, details: Dict[str, Any]) -> AgentState:
+def add_audit_entry(
+    state: AgentState, action: str, details: dict[str, Any]
+) -> AgentState:
     """Add audit log entry"""
-    state["audit_log"].append({
-        "timestamp": datetime.now().isoformat(),
-        "action": action,
-        "details": details,
-    })
+    state["audit_log"].append(
+        {
+            "timestamp": datetime.now().isoformat(),
+            "action": action,
+            "details": details,
+        }
+    )
     return state
 
 

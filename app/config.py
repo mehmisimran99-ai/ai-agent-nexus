@@ -4,11 +4,12 @@ Configuration management using Pydantic Settings
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     # App
     app_name: str = "AI Agent Nexus"
@@ -20,7 +21,7 @@ class Settings(BaseSettings):
     llm_model: str = "llama3.1:8b"
     ollama_base_url: str = "http://localhost:11434"
     llm_temperature: float = 0.1
-    openai_api_key: Optional[str] = None
+    openai_api_key: str | None = None
 
     # RAG
     embedding_model: str = "nomic-embed-text"
@@ -37,7 +38,7 @@ class Settings(BaseSettings):
     tool_approval_required: bool = True
 
     # External APIs
-    tavily_api_key: Optional[str] = None
+    tavily_api_key: str | None = None
 
     # Evaluation
     eval_threshold: float = 0.8  # 80% pass rate for CI gate

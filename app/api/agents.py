@@ -3,13 +3,14 @@
 Agent chat endpoints with streaming support
 """
 
+import json
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-import json
 
-from app.agents.graph import run_agent_stream, run_agent
+from app.agents.graph import run_agent, run_agent_stream
 from app.config import settings
 
 router = APIRouter()
@@ -17,20 +18,22 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     message: str = Field(..., description="User message")
-    thread_id: Optional[str] = Field(None, description="Conversation thread ID")
+    thread_id: str | None = Field(None, description="Conversation thread ID")
     stream: bool = Field(False, description="Enable SSE streaming")
-    config: Optional[Dict[str, Any]] = Field(None, description="Agent configuration overrides")
+    config: dict[str, Any] | None = Field(
+        None, description="Agent configuration overrides"
+    )
 
 
 class ChatResponse(BaseModel):
     response: str
     thread_id: str
-    tool_calls: List[Dict[str, Any]] = []
-    citations: List[Dict[str, Any]] = []
+    tool_calls: list[dict[str, Any]] = []
+    citations: list[dict[str, Any]] = []
 
 
 class ToolListResponse(BaseModel):
-    tools: List[Dict[str, Any]]
+    tools: list[dict[str, Any]]
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -43,13 +46,14 @@ async def chat_endpoint(request: ChatRequest):
             config=request.config,
         )
         return ChatResponse(**result)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - API boundary: report any failure as HTTP 500
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/chat/stream")
 async def chat_stream_endpoint(request: ChatRequest):
     """SSE streaming agent chat"""
+
     async def event_generator():
         async for chunk in run_agent_stream(
             message=request.message,
@@ -70,12 +74,13 @@ async def chat_stream_endpoint(request: ChatRequest):
 async def list_tools():
     """List available agent tools"""
     from app.tools.registry import get_tool_registry
+
     registry = get_tool_registry()
     return ToolListResponse(tools=registry.list_tools())
 
 
 @router.post("/configure")
-async def configure_agent(config: Dict[str, Any]):
+async def configure_agent(config: dict[str, Any]):
     """Update agent configuration"""
     # In production, persist to database
     return {"status": "configured", "config": config}

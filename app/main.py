@@ -4,13 +4,14 @@ AI Agent Nexus — Multi-Agent Orchestration Framework
 Entry point for FastAPI application
 """
 
+from contextlib import asynccontextmanager
+
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-import uvicorn
 
+from app.api import agents, memory, rag
 from app.config import settings
-from app.api import agents, rag, memory
 
 
 @asynccontextmanager
@@ -45,7 +46,11 @@ app.include_router(memory.router, prefix="/memory", tags=["memory"])
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": settings.app_name, "version": settings.version}
+    return {
+        "status": "healthy",
+        "service": settings.app_name,
+        "version": settings.version,
+    }
 
 
 @app.get("/")

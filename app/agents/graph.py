@@ -3,25 +3,28 @@
 LangGraph state machine for multi-agent orchestration
 """
 
-from typing import Dict, Any, Literal
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+from typing import Any, Literal
 
-from app.agents.state import AgentState, create_initial_state
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
+
+from app.agents.critic import run_critic
+from app.agents.executor import run_executor
 from app.agents.planner import run_planner
 from app.agents.researcher import run_researcher
-from app.agents.executor import run_executor
-from app.agents.critic import run_critic
+from app.agents.state import AgentState, create_initial_state
 from app.rag.pipeline import RAGPipeline
 
 
 # LLM placeholder - in production, use ChatOllama, ChatOpenAI, etc.
 class MockLLM:
     """Mock LLM for development - replace with real LLM"""
+
     async def ainvoke(self, messages):
         class MockResponse:
             def __init__(self, content):
                 self.content = content
+
         # Detect which agent is calling based on system prompt
         system = ""
         for m in messages:
@@ -42,7 +45,9 @@ _rag_pipeline = RAGPipeline()
 _checkpointer = MemorySaver()
 
 
-def should_continue(state: AgentState) -> Literal["planner", "researcher", "executor", "critic", "__end__"]:
+def should_continue(
+    state: AgentState,
+) -> Literal["planner", "researcher", "executor", "critic", "__end__"]:
     """Determine next node based on state"""
     next_agent = state.get("next_agent", "end")
     if next_agent == "end":
@@ -74,16 +79,16 @@ async def critic_node(state: AgentState) -> AgentState:
 def build_agent_graph() -> StateGraph:
     """Build the multi-agent LangGraph"""
     workflow = StateGraph(AgentState)
-    
+
     # Add nodes
     workflow.add_node("planner", planner_node)
     workflow.add_node("researcher", researcher_node)
     workflow.add_node("executor", executor_node)
     workflow.add_node("critic", critic_node)
-    
+
     # Set entry point
     workflow.set_entry_point("planner")
-    
+
     # Add conditional edges
     workflow.add_conditional_edges(
         "planner",
@@ -94,7 +99,7 @@ def build_agent_graph() -> StateGraph:
             "critic": "critic",
             "end": END,
             END: END,
-        }
+        },
     )
     workflow.add_conditional_edges(
         "researcher",
@@ -104,7 +109,7 @@ def build_agent_graph() -> StateGraph:
             "critic": "critic",
             "end": END,
             END: END,
-        }
+        },
     )
     workflow.add_conditional_edges(
         "executor",
@@ -113,7 +118,7 @@ def build_agent_graph() -> StateGraph:
             "critic": "critic",
             "end": END,
             END: END,
-        }
+        },
     )
     workflow.add_conditional_edges(
         "critic",
@@ -124,9 +129,9 @@ def build_agent_graph() -> StateGraph:
             "executor": "executor",
             "end": END,
             END: END,
-        }
+        },
     )
-    
+
     # Compile with checkpointer for persistence
     return workflow.compile(checkpointer=_checkpointer)
 
@@ -142,20 +147,25 @@ def get_agent_graph():
     return _agent_graph
 
 
-async def run_agent(message: str, thread_id: str = None, config: Dict[str, Any] = None) -> Dict[str, Any]:
+async def run_agent(
+    message: str, thread_id: str | None = None, config: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Run agent synchronously (non-streaming)"""
     graph = get_agent_graph()
-    
+
     if thread_id is None:
         import uuid
+
         thread_id = str(uuid.uuid4())
-    
+
     # Create initial state
     initial_state = create_initial_state(thread_id, config or {})
-    
+
     # Add user message
-    from app.agents.state import AgentMessage, add_message
     from datetime import datetime
+
+    from app.agents.state import AgentMessage, add_message
+
     user_msg = AgentMessage(
         id=f"msg_{len(initial_state['messages'])}",
         role="user",
@@ -163,22 +173,22 @@ async def run_agent(message: str, thread_id: str = None, config: Dict[str, Any] 
         timestamp=datetime.now(),
     )
     initial_state = add_message(initial_state, user_msg)
-    
+
     # Run graph
     thread_config = {"configurable": {"thread_id": thread_id}}
     final_state = await graph.ainvoke(initial_state, thread_config)
-    
+
     # Extract response
     response = ""
     tool_calls = []
     citations = []
-    
+
     for msg in final_state["messages"]:
         if msg.role == "assistant":
             response = msg.content
             tool_calls = [tc.model_dump() for tc in msg.tool_calls]
             citations = [c.model_dump() for c in msg.citations]
-    
+
     return {
         "response": response or "Task completed",
         "thread_id": thread_id,
@@ -187,18 +197,23 @@ async def run_agent(message: str, thread_id: str = None, config: Dict[str, Any] 
     }
 
 
-async def run_agent_stream(message: str, thread_id: str = None, config: Dict[str, Any] = None):
+async def run_agent_stream(
+    message: str, thread_id: str | None = None, config: dict[str, Any] | None = None
+):
     """Run agent with streaming updates"""
     graph = get_agent_graph()
-    
+
     if thread_id is None:
         import uuid
+
         thread_id = str(uuid.uuid4())
-    
+
     initial_state = create_initial_state(thread_id, config or {})
-    
-    from app.agents.state import AgentMessage, add_message
+
     from datetime import datetime
+
+    from app.agents.state import AgentMessage, add_message
+
     user_msg = AgentMessage(
         id=f"msg_{len(initial_state['messages'])}",
         role="user",
@@ -206,11 +221,13 @@ async def run_agent_stream(message: str, thread_id: str = None, config: Dict[str
         timestamp=datetime.now(),
     )
     initial_state = add_message(initial_state, user_msg)
-    
+
     thread_config = {"configurable": {"thread_id": thread_id}}
-    
+
     # Stream events
-    async for event in graph.astream(initial_state, thread_config, stream_mode="values"):
+    async for event in graph.astream(
+        initial_state, thread_config, stream_mode="values"
+    ):
         # Yield state updates
         state = event
         yield {
@@ -219,7 +236,7 @@ async def run_agent_stream(message: str, thread_id: str = None, config: Dict[str
             "task_type": state.get("task_type"),
             "messages_count": len(state["messages"]),
         }
-    
+
     # Final result
     final_state = await graph.ainvoke(initial_state, thread_config)
     response = ""
@@ -227,7 +244,7 @@ async def run_agent_stream(message: str, thread_id: str = None, config: Dict[str
         if msg.role == "assistant":
             response = msg.content
             break
-    
+
     yield {
         "thread_id": thread_id,
         "response": response or "Task completed",

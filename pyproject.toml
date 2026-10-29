@@ -1,0 +1,4 @@
+[tool.ruff]
+# CI runs Python 3.11; keep lint/format rules aligned with that target.
+target-version = "py311"
+line-length = 88
